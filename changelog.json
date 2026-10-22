@@ -2,14 +2,15 @@
   "schema": 1,
   "releases": [
     {
-      "version": "unreleased",
+      "version": "0.1.0",
       "date": "2026-10-22",
+      "tag": "v0.1.0",
       "items": [
         {
           "type": "added",
           "title": "release pipeline building six platforms",
           "desc": "Builds self-contained binaries, publishes checksums, and pulls release notes from the changelog.",
-          "commit": "30e4591"
+          "commit": "\n30e459"
         },
         {
           "type": "docs",

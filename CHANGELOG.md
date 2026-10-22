@@ -2,11 +2,12 @@
 
 Generated from conventional commits. Edit commit messages, not this file.
 
-## Unreleased - 2026-10-22
+## v0.1.0 - 2026-10-22
 
 ### Added
 
-- release pipeline building six platforms - Builds self-contained binaries, publishes checksums, and pulls release notes from the changelog. (`30e4591`)
+- release pipeline building six platforms - Builds self-contained binaries, publishes checksums, and pulls release notes from the changelog. (`
+30e459`)
 - one-line installers for macos, linux, and windows - Both verify a published sha256 before installing and support --uninstall. (`
 16d633`)
 - changelog generated from conventional commits - changelog.json is the source of truth and CHANGELOG.md is derived from it, so the two can never disagree. (`
