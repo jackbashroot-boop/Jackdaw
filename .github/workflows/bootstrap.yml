@@ -1,31 +1,39 @@
-name: Bootstrap
+name: bootstrap
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  bootstrap:
+  scaffold:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          fetch-depth: 0
 
-      - name: Install dependencies
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Configure git
         run: |
-          if [ -f package.json ]; then
-            npm install
-          else
-            echo "No package.json found. Skipping dependency installation."
-          fi
+          git config user.name  "jackbashroot-boop"
+          git config user.email "jackbashroot-boop@users.noreply.github.com"
 
-      - name: Bootstrap status
-        run: echo "Repository bootstrapped successfully."
+      - name: Run the bootstrap
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash bootstrap.sh
+
+      - name: Summary
+        run: |
+          {
+            echo "### Bootstrap complete"
+            echo
+            echo '```'
+            git log --oneline | head -20
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
