@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/Jackdaw.Cli/Jackdaw.Cli.csproj" />
+  <Project Path="tools/Jackdaw.ChangelogGen/Jackdaw.ChangelogGen.csproj" />
+</Solution>

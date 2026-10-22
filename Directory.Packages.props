@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <!--
+    Central package management. Any <PackageReference> added to a project MUST have a
+    matching <PackageVersion> here, or the build fails with NU1010.
+  -->
+  <ItemGroup>
+    <!-- <PackageVersion Include="Velopack" Version="0.0.0" /> -->
+  </ItemGroup>
+</Project>
