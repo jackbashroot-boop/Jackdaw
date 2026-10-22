@@ -114,7 +114,7 @@ JACKDAW_EOF
 write global.json <<'JACKDAW_EOF'
 {
   "sdk": {
-    "version": "10.0.100",
+    "version": "8.0.100",
     "rollForward": "latestFeature"
   }
 }
@@ -123,7 +123,7 @@ JACKDAW_EOF
 write Directory.Build.props <<'JACKDAW_EOF'
 <Project>
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -189,7 +189,7 @@ SOFTWARE.
 JACKDAW_EOF
 
 commit "feat: repository skeleton and shared build properties" \
-       "Pin the SDK to the .NET 10 LTS channel, centralise package versions, and enable nullable reference types."
+       "Pin the SDK to the .NET 8 LTS channel, centralise package versions, and enable nullable reference types."
 
 # --------------------------------------------------------------------- cli ---
 
@@ -1001,7 +1001,7 @@ Both verify a published SHA-256 before installing, and both support `--uninstall
 
 ## Design decisions worth knowing
 
-- **.NET 10, self-contained.** One binary per platform, no runtime install.
+- **.NET 8, self-contained.** One binary per platform, no runtime install.
 - **The model runs in a separate process** (llama.cpp with the Vulkan backend for AMD).
   This app is only an HTTP client, so swapping models never touches the code.
 - **Windows service plus unprivileged clients.** The tray, CLI, and LAN dashboard all
@@ -1056,7 +1056,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: '8.0.x'
 
       - name: Build
         run: dotnet build Jackdaw.slnx -c Release
@@ -1091,13 +1091,11 @@ permissions:
 
 jobs:
   build:
+    needs: build
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # All six targets build on three stable runners. Cross-publishing works
-        # because this is self-contained, not Native AOT. Swap to native arm
-        # runners only if you move to AOT later.
         include:
           - { rid: win-x64,     os: windows-latest }
           - { rid: win-arm64,   os: windows-latest }
@@ -1113,7 +1111,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: '8.0.x'
 
       - name: Publish
         shell: bash
@@ -1156,7 +1154,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: '8.0.x'
 
       - uses: actions/download-artifact@v4
         with:
@@ -1225,7 +1223,7 @@ if [ "$RUN_GEN" = 1 ]; then
   else
     echo
     echo "note: dotnet not found, skipping changelog generation"
-    echo "      install the .NET 10 SDK, then run:"
+    echo "      install the .NET 8 SDK, then run:"
     echo "      dotnet run --project tools/Jackdaw.ChangelogGen"
   fi
 fi
