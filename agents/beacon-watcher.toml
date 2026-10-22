@@ -1,0 +1,19 @@
+# A sub-agent. Phase 0 ships the schema; the orchestrator lands in a later phase.
+# Sub-agents share the loaded model. They are a system prompt plus a tool
+# allowlist, not a new model instance, which is why spawning them is cheap.
+
+role  = "beacon-watcher"
+goal  = "Flag hosts making suspiciously regular outbound connections."
+model = "tiny"          # tiny | local | cloud
+tools = ["conn_table", "dns_log", "firewall_block"]
+
+[trigger]
+schedule = "*/5m"
+
+[limits]
+max_actions_per_hour = 20
+budget_usd_per_day   = 0.10
+
+[policy]
+dry_run           = true   # observe only until you approve
+requires_approval = ["firewall_block"]
