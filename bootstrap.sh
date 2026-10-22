@@ -1091,7 +1091,6 @@ permissions:
 
 jobs:
   build:
-    needs: build
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -1253,3 +1252,4 @@ echo "  dotnet run --project src/Jackdaw.Cli -- changelog"
 echo
 echo "Then cut the first release:"
 echo "  git tag v0.1.0 && git push --tags"
+
