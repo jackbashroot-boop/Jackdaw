@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build
+        run: dotnet build Jackdaw.slnx -c Release
+
+      - name: Check the changelog is current
+        run: |
+          dotnet run --project tools/Jackdaw.ChangelogGen -c Release -- --quiet
+          if ! git diff --quiet -- changelog.json CHANGELOG.md; then
+            echo "::warning::changelog.json or CHANGELOG.md is stale. Run: dotnet run --project tools/Jackdaw.ChangelogGen"
+          fi
+
+      - name: Smoke test
+        run: |
+          dotnet run --project src/Jackdaw.Cli -c Release -- version
+          dotnet run --project src/Jackdaw.Cli -c Release -- doctor
