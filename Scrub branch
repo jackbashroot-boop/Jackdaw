@@ -1,6 +1,0 @@
-bash branch.sh list
-bash branch.sh create dev --from main
-bash branch.sh reset  main --from pre-bootstrap     # throw the whole bootstrap away
-bash branch.sh reset  main --from main              # same content, brand new ref
-bash branch.sh delete dev --yes
-bash branch.sh reset  main --from pre-bootstrap --dry-run
