@@ -1,0 +1,3 @@
+git checkout main
+git branch -D <experimental>
+git checkout -b <experimental> main   
