@@ -26,8 +26,6 @@ on:
         required: false
         default: ""
 
-# contents:write pushes the tree. actions:write is what the workflow_dispatch
-# API call at the end needs; without it you get 403 Resource not accessible.
 permissions:
   contents: write
   actions: write
@@ -42,9 +40,6 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      # fetch-depth 0: the changelog generator walks real history.
-      # Pinned to the commit of a Node 24 release; the trailing comment is what
-      # Dependabot reads to open upgrade PRs.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -61,16 +56,10 @@ jobs:
           git config user.name  "jackbashroot-boop"
           git config user.email "jackbashroot-boop@users.noreply.github.com"
 
-      # SPLIT INTO SIX STEPS ON PURPOSE.
-      # GitHub parses a run: script that contains ${{ }} as ONE expression, capped
-      # at 21000 characters. The assembled script is ~58k, so it has to be chunked.
-      # Chunks 1-5 contain no ${{ at all. Chunk 6 carries the escaped ones.
-      # Do not merge these back into a single step.
-      #
-      # The heredoc is quoted, so the shell leaves $ alone. The ${{ '$' }}{{ form is
-      # the escape that survives GitHub's own expansion pass and lands on disk as a
-      # plain ${{. Result: bootstrap.sh is byte-identical to a local copy.
-      - name: Seed bootstrap.sh (1/6)
+      # GitHub parses any run: block CONTAINING ${{ }} as ONE expression, capped at
+      # 21000 chars. The assembled script is ~58k, so it is written in ten appends.
+      # Only step 9 carries ${{. Do not merge these back together.
+      - name: Seed 1/10
         run: |
           cat > bootstrap.sh <<'BOOTSTRAP_EOF'
           #!/usr/bin/env bash
@@ -135,18 +124,14 @@ jobs:
           note() { printf '  %s\n' "$*"; }
           bad()  { printf 'FAIL  %s\n' "$*" >&2; }
 
-          # ------------------------------------------------------------ checks ---
-
           if [ ! -d .git ]; then
             echo "Not inside a git repository. Clone it first:" >&2
             echo "  git clone https://github.com/$REPO.git && cd Jackdaw" >&2
             exit 1
           fi
 
-          # Runner checkouts are owned by another UID; git refuses without this.
           git config --global --add safe.directory "$PWD" 2>/dev/null || true
 
-          # Take the repo name from the remote so a sandbox fork works unchanged.
           detected="$(git remote get-url origin 2>/dev/null | sed -E 's#^.*github\.com[:/]##; s#\.git$##' || true)"
           if [ -n "$detected" ]; then REPO="$detected"; fi
 
@@ -157,7 +142,6 @@ jobs:
 
           git rev-parse --verify HEAD >/dev/null 2>&1 || git checkout -b main 2>/dev/null || true
 
-          # A detached checkout reports "HEAD"; fall back to the triggering ref.
           branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
           if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
             branch="${GITHUB_REF_NAME:-main}"
@@ -180,8 +164,6 @@ jobs:
             fi
           fi
 
-          # -------------------------------------------------------------- undo ---
-
           if [ "$UNDO" = 1 ]; then
             base="$(git rev-parse -q --verify "refs/heads/$BACKUP_REF" 2>/dev/null || true)"
             if [ -z "$base" ]; then
@@ -197,8 +179,6 @@ jobs:
             exit 0
           fi
 
-          # ------------------------------------------------------------ guards ---
-
           if [ "$FORCE" = 0 ] && [ -n "$(git status --porcelain)" ]; then
             echo "error: the working tree has uncommitted changes." >&2
             echo "       commit or stash them, or pass --force." >&2
@@ -206,8 +186,6 @@ jobs:
             exit 1
           fi
 
-          # Pinned at the state before the FIRST bootstrap. Never moved, so a
-          # second run cannot overwrite your escape hatch.
           if ! git rev-parse -q --verify "refs/heads/$BACKUP_REF" >/dev/null 2>&1 \
              && ! git rev-parse -q --verify "refs/remotes/origin/$BACKUP_REF" >/dev/null 2>&1; then
             git branch "$BACKUP_REF" HEAD
@@ -240,6 +218,11 @@ jobs:
           echo
           echo "Writing files"
           echo
+          BOOTSTRAP_EOF
+
+      - name: Seed 2/10
+        run: |
+          cat >> bootstrap.sh <<'BOOTSTRAP_EOF'
 
           # ---------------------------------------------------------- skeleton ---
 
@@ -279,8 +262,7 @@ jobs:
           indent_size = 2
           JACKDAW_EOF
 
-          # 9.0.200 is the floor for .slnx support in the dotnet CLI. Pinning it
-          # here means an older SDK fails loudly instead of cryptically later.
+          # 9.0.200 is the floor for .slnx support in the dotnet CLI.
           write global.json <<'JACKDAW_EOF'
           {
             "sdk": {
@@ -327,8 +309,7 @@ jobs:
           </Project>
           JACKDAW_EOF
 
-          # .slnx, not .sln. The CLI errors if both exist in one directory, so
-          # every build command names this file explicitly.
+          # .slnx, not .sln. The CLI errors if both exist in one directory.
           write Jackdaw.slnx <<'JACKDAW_EOF'
           <Solution>
             <Project Path="src/Jackdaw.Cli/Jackdaw.Cli.csproj" />
@@ -364,7 +345,7 @@ jobs:
                  "Pin the SDK to the .NET 9 channel, centralise package versions, and enable nullable reference types."
           BOOTSTRAP_EOF
 
-      - name: Seed bootstrap.sh (2/6)
+      - name: Seed 3/10
         run: |
           cat >> bootstrap.sh <<'BOOTSTRAP_EOF'
 
@@ -531,7 +512,7 @@ jobs:
                  "The changelog is embedded in the binary so an installed copy can always show it."
           BOOTSTRAP_EOF
 
-      - name: Seed bootstrap.sh (3/6)
+      - name: Seed 4/10
         run: |
           cat >> bootstrap.sh <<'BOOTSTRAP_EOF'
 
@@ -603,8 +584,6 @@ jobs:
           var subjectRx = SubjectRx();
           var items = commits.Select(ToItem).OfType<ChangelogItem>().ToList();
 
-          // Stamp the unreleased section with the newest commit's date, not today's
-          // clock. Otherwise the file differs every day and every check fires.
           var date = commits.Count > 0
               ? commits[0].Date
               : DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -788,9 +767,6 @@ jobs:
               return commits;
           }
 
-          // The newest tag that is an ancestor of HEAD and does NOT point at HEAD.
-          // Without the second condition a release run on a tag sees an empty range
-          // and the release notes come out blank.
           static string? LastTag(string repo)
           {
               var head = TryGit(repo, "rev-parse", "HEAD");
@@ -837,6 +813,11 @@ jobs:
 
           internal sealed record ChangelogItem(string Type, string Title, string Desc, string? Commit);
           JACKDAW_EOF
+          BOOTSTRAP_EOF
+
+      - name: Seed 5/10
+        run: |
+          cat >> bootstrap.sh <<'BOOTSTRAP_EOF'
 
           write changelog.json <<'JACKDAW_EOF'
           {
@@ -889,7 +870,7 @@ jobs:
                  "changelog.json is the source of truth and CHANGELOG.md is derived from it, so the two can never disagree."
           BOOTSTRAP_EOF
 
-      - name: Seed bootstrap.sh (4/6)
+      - name: Seed 6/10
         run: |
           cat >> bootstrap.sh <<'BOOTSTRAP_EOF'
 
@@ -1006,6 +987,11 @@ jobs:
               info "export PATH=\"$BIN_DIR:\$PATH\"" ;;
           esac
           JACKDAW_EOF
+          BOOTSTRAP_EOF
+
+      - name: Seed 7/10
+        run: |
+          cat >> bootstrap.sh <<'BOOTSTRAP_EOF'
 
           write install.ps1 <<'JACKDAW_EOF'
           #Requires -Version 5.1
@@ -1032,8 +1018,6 @@ jobs:
 
           function Say  { param([string]$m) Write-Host $m }
           function Info { param([string]$m) Write-Host "  $m" }
-          # Write-Error under ErrorActionPreference=Stop throws before exit 1 runs,
-          # which wraps the message in an exception dump. Write-Host then exit is cleaner.
           function Die  { param([string]$m) Write-Host "jackdaw: $m" -ForegroundColor Red; exit 1 }
 
           $RootDir = if ($env:JACKDAW_HOME) { $env:JACKDAW_HOME } else { Join-Path $env:LOCALAPPDATA 'Jackdaw' }
@@ -1121,15 +1105,13 @@ jobs:
           }
           JACKDAW_EOF
 
-          # filemode is on for Linux runners, so chmod BEFORE the commit is what
-          # actually lands mode 100755 in HEAD.
           chmod +x install.sh 2>/dev/null || true
 
           commit "feat: one-line installers for macos, linux, and windows" \
                  "Both verify a published sha256 before installing and support --uninstall."
           BOOTSTRAP_EOF
 
-      - name: Seed bootstrap.sh (5/6)
+      - name: Seed 8/10
         run: |
           cat >> bootstrap.sh <<'BOOTSTRAP_EOF'
 
@@ -1278,15 +1260,6 @@ jobs:
               bash bootstrap.sh --force       # rerun over a dirty tree
               bash bootstrap.sh --undo        # reset to pre-bootstrap
               bash bootstrap.sh --tag v0.1.0  # bootstrap, then tag
-
-          `--skip-existing` leaves any file that already exists untouched, which is how you
-          hand-edit a file and still rerun the rest.
-
-          ## Sandbox first
-
-          The script reads the owner/repo from the origin remote, so a throwaway repo works
-          with no edits. The only thing that hardcodes the name is `install.sh` and
-          `install.ps1`, which point at the canonical release URL.
           JACKDAW_EOF
 
           write .github/ISSUE_TEMPLATE/bootstrap-feedback.yml <<'JACKDAW_EOF'
@@ -1317,7 +1290,6 @@ jobs:
           write .github/dependabot.yml <<'JACKDAW_EOF'
           version: 2
           updates:
-            # Reads the version comment after each pinned SHA and opens upgrade PRs.
             - package-ecosystem: github-actions
               directory: "/"
               schedule:
@@ -1334,9 +1306,7 @@ jobs:
                  "Documents the naming collisions so the shared name is a deliberate choice."
           BOOTSTRAP_EOF
 
-      # This chunk carries the escaped ${{ sequences, so it is the one the 21000-char
-      # expression cap actually applies to. It is ~12k.
-      - name: Seed bootstrap.sh (6/6)
+      - name: Seed 9/10
         run: |
           cat >> bootstrap.sh <<'BOOTSTRAP_EOF'
 
@@ -1349,8 +1319,6 @@ jobs:
             push:
               branches: [main]
             pull_request:
-            # A push made with GITHUB_TOKEN does not trigger other workflows, so the
-            # bootstrap kicks this off by hand. That needs this trigger and actions:write.
             workflow_dispatch:
 
           jobs:
@@ -1384,7 +1352,7 @@ jobs:
                   run: |
                     dotnet run --project tools/Jackdaw.ChangelogGen -c Release -- --quiet
                     if ! git diff --quiet -- changelog.json CHANGELOG.md; then
-                      echo "::warning::changelog.json or CHANGELOG.md is stale. Run: dotnet run --project tools/Jackdaw.ChangelogGen"
+                      echo "::warning::changelog.json or CHANGELOG.md is stale."
                     fi
 
                 - name: Smoke test
@@ -1415,8 +1383,7 @@ jobs:
                 fail-fast: false
                 matrix:
                   # macos-15 is arm64. osx-x64 cross-compiles from it, which works
-                  # because this is self-contained, not Native AOT. macos-14 was
-                  # retired on 2026-11-02.
+                  # because this is self-contained, not Native AOT.
                   include:
                     - { rid: win-x64,     os: windows-latest }
                     - { rid: win-arm64,   os: windows-latest }
@@ -1504,8 +1471,6 @@ jobs:
                     ' CHANGELOG.md > notes.md
                     test -s notes.md || echo "See CHANGELOG.md" > notes.md
 
-                # Without this the released section only exists inside the release notes,
-                # and the next generator run on main silently drops it.
                 - name: Commit the released changelog back to main
                   run: |
                     git config user.name  "github-actions[bot]"
@@ -1531,6 +1496,11 @@ jobs:
 
           commit "feat: release pipeline building six platforms" \
                  "Builds self-contained binaries, publishes checksums, and pulls release notes from the changelog."
+          BOOTSTRAP_EOF
+
+      - name: Seed 10/10
+        run: |
+          cat >> bootstrap.sh <<'BOOTSTRAP_EOF'
 
           # ------------------------------------------------------------ verify ---
 
@@ -1598,8 +1568,6 @@ jobs:
             fi
           fi
 
-          # ---------------------------------------------------------- integrity ---
-
           if [ "$DRY_RUN" = 0 ]; then
             if command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1; then
               git ls-files | grep -v '^MANIFEST\.sha256$' | sort > .manifest.list
@@ -1609,8 +1577,6 @@ jobs:
                      "sha256 of every tracked file, so a fresh clone can be verified."
             fi
           fi
-
-          # --------------------------------------------------------------- push ---
 
           if [ "$DRY_RUN" = 1 ]; then
             echo
@@ -1632,12 +1598,9 @@ jobs:
               exit 1
             fi
 
-            # Publish the recovery ref too, so undo works from any clone.
             git push origin "refs/heads/$BACKUP_REF:refs/heads/$BACKUP_REF" 2>/dev/null \
               || note "could not publish $BACKUP_REF (harmless)"
           fi
-
-          # ---------------------------------------------------------------- tag ---
 
           if [ -n "$TAG" ] && [ "$DRY_RUN" = 0 ]; then
             if command -v dotnet >/dev/null 2>&1; then
@@ -1656,8 +1619,6 @@ jobs:
             git tag -a "$TAG" -m "Jackdaw $TAG"
             if [ "$DO_PUSH" = 1 ]; then git push origin "$TAG"; fi
 
-            # A GITHUB_TOKEN tag push fires no workflow either, so dispatch the
-            # release by hand. Retry while GitHub registers the new file.
             if [ "$HAVE_GH" = 1 ] && [ -n "${GITHUB_ACTIONS:-}" ] && [ "$DO_PUSH" = 1 ]; then
               attempt=1
               while [ "$attempt" -le 5 ]; do
@@ -1668,8 +1629,6 @@ jobs:
               done
             fi
           fi
-
-          # ----------------------------------------------------------------- gh ---
 
           if [ "$HAVE_GH" = 1 ]; then
             echo
@@ -1703,7 +1662,8 @@ jobs:
         run: |
           chmod +x bootstrap.sh
           bash -n bootstrap.sh
-          echo "bootstrap.sh: $(wc -c < bootstrap.sh) bytes, $(wc -l < bootstrap.sh) lines"
+          printf 'bootstrap.sh: %s bytes, %s lines\n' "$(wc -c < bootstrap.sh)" "$(wc -l < bootstrap.sh)"
+          printf 'largest run block: %s chars\n' "$(awk 'BEGIN{m=0;n=0} /^        run: \|/{if(n>m)m=n;n=0;next} /^          /{n+=length($0)+1} END{if(n>m)m=n;print m}' .github/workflows/bootstrap.yml)"
           git add bootstrap.sh
           if ! git diff --cached --quiet; then
             git commit -q -m "chore: refresh bootstrap script"
