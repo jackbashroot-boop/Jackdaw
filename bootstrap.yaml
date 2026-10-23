@@ -61,10 +61,16 @@ jobs:
           git config user.name  "jackbashroot-boop"
           git config user.email "jackbashroot-boop@users.noreply.github.com"
 
-      # The heredoc is quoted, so the shell leaves $ alone. The ${{ '$' }}{{ form
-      # is the escape that survives GitHub's own expansion pass and lands on disk
-      # as a plain ${{. Result: bootstrap.sh is byte-identical to a local copy.
-      - name: Seed bootstrap.sh
+      # SPLIT INTO SIX STEPS ON PURPOSE.
+      # GitHub parses a run: script that contains ${{ }} as ONE expression, capped
+      # at 21000 characters. The assembled script is ~58k, so it has to be chunked.
+      # Chunks 1-5 contain no ${{ at all. Chunk 6 carries the escaped ones.
+      # Do not merge these back into a single step.
+      #
+      # The heredoc is quoted, so the shell leaves $ alone. The ${{ '$' }}{{ form is
+      # the escape that survives GitHub's own expansion pass and lands on disk as a
+      # plain ${{. Result: bootstrap.sh is byte-identical to a local copy.
+      - name: Seed bootstrap.sh (1/6)
         run: |
           cat > bootstrap.sh <<'BOOTSTRAP_EOF'
           #!/usr/bin/env bash
@@ -356,6 +362,11 @@ jobs:
 
           commit "feat: repository skeleton and shared build properties" \
                  "Pin the SDK to the .NET 9 channel, centralise package versions, and enable nullable reference types."
+          BOOTSTRAP_EOF
+
+      - name: Seed bootstrap.sh (2/6)
+        run: |
+          cat >> bootstrap.sh <<'BOOTSTRAP_EOF'
 
           # --------------------------------------------------------------- cli ---
 
@@ -518,6 +529,11 @@ jobs:
 
           commit "feat: cli with version, changelog, and doctor commands" \
                  "The changelog is embedded in the binary so an installed copy can always show it."
+          BOOTSTRAP_EOF
+
+      - name: Seed bootstrap.sh (3/6)
+        run: |
+          cat >> bootstrap.sh <<'BOOTSTRAP_EOF'
 
           # ---------------------------------------------------------- changelog ---
 
@@ -871,6 +887,11 @@ jobs:
 
           commit "feat: changelog generated from conventional commits" \
                  "changelog.json is the source of truth and CHANGELOG.md is derived from it, so the two can never disagree."
+          BOOTSTRAP_EOF
+
+      - name: Seed bootstrap.sh (4/6)
+        run: |
+          cat >> bootstrap.sh <<'BOOTSTRAP_EOF'
 
           # ---------------------------------------------------------- installers ---
 
@@ -1106,6 +1127,11 @@ jobs:
 
           commit "feat: one-line installers for macos, linux, and windows" \
                  "Both verify a published sha256 before installing and support --uninstall."
+          BOOTSTRAP_EOF
+
+      - name: Seed bootstrap.sh (5/6)
+        run: |
+          cat >> bootstrap.sh <<'BOOTSTRAP_EOF'
 
           # ------------------------------------------------------------- agents ---
 
@@ -1306,6 +1332,13 @@ jobs:
 
           commit "docs: readme, agent schema, and roadmap" \
                  "Documents the naming collisions so the shared name is a deliberate choice."
+          BOOTSTRAP_EOF
+
+      # This chunk carries the escaped ${{ sequences, so it is the one the 21000-char
+      # expression cap actually applies to. It is ~12k.
+      - name: Seed bootstrap.sh (6/6)
+        run: |
+          cat >> bootstrap.sh <<'BOOTSTRAP_EOF'
 
           # ----------------------------------------------------------------- ci ---
 
@@ -1665,7 +1698,12 @@ jobs:
           echo "Undo at any point with:"
           echo "  bash bootstrap.sh --undo"
           BOOTSTRAP_EOF
+
+      - name: Finalise bootstrap.sh
+        run: |
           chmod +x bootstrap.sh
+          bash -n bootstrap.sh
+          echo "bootstrap.sh: $(wc -c < bootstrap.sh) bytes, $(wc -l < bootstrap.sh) lines"
           git add bootstrap.sh
           if ! git diff --cached --quiet; then
             git commit -q -m "chore: refresh bootstrap script"
